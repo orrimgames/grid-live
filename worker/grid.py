@@ -277,7 +277,7 @@ def main():
     S["prices"] = lc
     S["summary"] = {k: summarize(b, lc) for k, b in S["bots"].items()}
     S["features"] = {c: {"atr": F[c]["A"][-1], "trend": round(F[c]["TR"][-1], 3), "z": round(F[c]["Z"][-1], 3)} for c in COINS}
-    json.dump(S, open(STATE, "w"), separators=(",", ":"))
+    os.makedirs(os.path.dirname(STATE), exist_ok=True); json.dump(S, open(STATE, "w"), separators=(",", ":"))
     for k, b in S["bots"].items(): print(k, round(b["equity"], 2), "dd", round(b["maxdd"] * 100, 2), "%", "fills", b["nfills"], "eps", len(b["episodes"]))
 
 if __name__ == "__main__":
