@@ -31,18 +31,18 @@ canvas{width:100%;display:block}table{width:100%;border-collapse:collapse}th,td{
 <div class="note" id="cfg"></div>
 <div class="note">Paper simulation. Fills are modeled on 5m candles: a limit fills only when price trades 2bp through the level, maker 2bp / taker 4.5bp fees, stop slippage 5bp. Real queue position, latency and partial fills are not modeled. Backtest history: validated adaptive config walk-forward 2021-26 +0.21R/episode; the static lattice is the challenger. Not financial advice.</div>
 <script>
-const COINS=["BTC","ETH","BNB","LTC","ADA","XRP","LINK","ETC"];let S=null,bot="adaptive",coin="BTC",cand=[];
+const COINS=["BTC","ETH","BNB","LTC","ADA","XRP","LINK","ETC"];let S=null,bot="static",coin="BTC",cand=[];
 const $=id=>document.getElementById(id),f=(x,d=2)=>Number(x).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d});
 const cls=x=>x>=0?"pos":"neg",pxf=x=>x>=1000?f(x,1):x>=10?f(x,3):f(x,5);
 const tm=t=>new Date(t).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 async function load(){for(const u of ["state/state.json","https://raw.githubusercontent.com/orrimgames/grid-live/main/state/state.json"]){try{const r=await fetch(u+"?"+Date.now());if(r.ok){S=await r.json();return}}catch(e){}}}
-function tabs(){$("tabs").innerHTML=["adaptive","static"].map(b=>`<button class="${b==bot?"on":""}" onclick="bot='${b}';draw()">${b==="adaptive"?"Adaptive (validated)":"Static lattice (challenger)"}</button>`).join(" ")}
+function tabs(){$("tabs").innerHTML=["static"].map(b=>`<button class="on">Hybrid lattice</button>`).join(" ")}
 function liveEq(B){let e=B.equity;if(!MID.BTC)return e;for(const c of COINS){const k=B.coins[c];if(k&&k.pos&&MID[c]&&S.prices[c])e+=k.pos*(MID[c]-S.prices[c])}if(B.hp)e+=B.hp*(MID.BTC-S.prices.BTC);return e}
 function cards(){const B=S.bots[bot],sm=S.summary[bot],st=sm.stats,pl=liveEq(B)-S.config.start;
  const a=[["Equity","$"+f(liveEq(B),0)],["P&L",(pl>=0?"+":"")+"$"+f(pl,0),cls(pl)],["Return",f(pl/S.config.start*100)+"%",cls(pl)],["Max DD",f(B.maxdd*100)+"%"],["Episodes",st.episodes],["Win rate",st.win==null?"-":f(st.win*100,0)+"%"],["EV / episode",st.evR==null?"-":f(st.evR,2)+"R"],["Fills",st.fills],["Stops",st.stops],["Fees","$"+f(st.fees,0)],["BTC hedge","$"+f(sm.hedge.usd,0)]];
  $("cards").innerHTML=a.map(x=>`<div class="card"><span>${x[0]}</span><b class="${x[2]||""}">${x[1]}</b></div>`).join("")}
 function eqchart(){const c=$("eq"),W=c.width=c.clientWidth*2,H=c.height=380,x=c.getContext("2d");x.clearRect(0,0,W,H);
- const sr={adaptive:S.bots.adaptive.curve,static:S.bots.static.curve},col={adaptive:"#5aa9ff",static:"#e8b84a"};let all=[];for(const k in sr)all=all.concat(sr[k]);
+ const sr={static:S.bots.static.curve},col={static:"#e8b84a"};let all=[];for(const k in sr)all=all.concat(sr[k]);
  if(all.length<2){x.fillStyle="#7e8aa0";x.font="22px monospace";x.fillText("collecting data... equity curve fills in hourly",20,60);return}
  const t0=Math.min(...all.map(p=>p[0])),t1=Math.max(...all.map(p=>p[0])),v=all.map(p=>(p[1]/S.config.start-1)*100),lo=Math.min(0,...v),hi=Math.max(0.1,...v);
  const X=t=>40+(t-t0)/(t1-t0||1)*(W-60),Y=y=>H-30-(y-lo)/(hi-lo||1)*(H-60);x.strokeStyle="#232c3b";x.lineWidth=2;x.beginPath();x.moveTo(40,Y(0));x.lineTo(W-20,Y(0));x.stroke();

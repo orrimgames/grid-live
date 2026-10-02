@@ -260,8 +260,11 @@ def main():
     now = int(time.time() * 1000); now_bar = now // BAR * BAR   # first non-closed bar open
     h1 = {c: candles(c, "1h", now - 700 * 3600000, now) for c in COINS}
     ts1, F = features(h1)
-    if os.path.exists(STATE): S = json.load(open(STATE))
-    else: S = {"started": now, "last_ts": 0, "config": {}, "bots": {"adaptive": new_bot("adaptive"), "static": new_bot("static")}}
+    if os.path.exists(STATE):
+        S = json.load(open(STATE)); S["bots"].pop("adaptive", None)
+        for k in ("summary",):
+            if isinstance(S.get(k), dict): S[k].pop("adaptive", None)
+    else: S = {"started": now, "last_ts": 0, "config": {}, "bots": {"static": new_bot("static")}}
     S["config"] = {"coins": COINS, "lev": LEV, "k": K, "levels": LMAX, "geo": G, "atr": 24, "donchian": 48, "sl": SL, "pen_bp": PEN * 1e4,
                    "maker_bp": FEE_M * 1e4, "taker_bp": FEE_T * 1e4, "hedge": HEDGE, "start": START}
     t_from = S["last_ts"]
