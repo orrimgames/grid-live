@@ -1,0 +1,70 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grid Bot - live paper</title>
+<style>
+:root{--bg:#0b0e14;--p:#141a24;--b:#232c3b;--t:#d7deea;--m:#7e8aa0;--g:#26a69a;--r:#ef5350;--y:#e8b84a;--bl:#5aa9ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Segoe UI,Roboto,monospace}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--b)}
+h1{font-size:15px;margin:0}.tag{background:#1d2735;border:1px solid var(--b);padding:2px 8px;border-radius:10px;color:var(--m);font-size:11px}
+.tabs button{background:var(--p);border:1px solid var(--b);color:var(--t);padding:5px 10px;border-radius:6px;cursor:pointer}
+.tabs button.on{border-color:var(--bl);color:var(--bl)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;padding:10px 14px}
+.card{background:var(--p);border:1px solid var(--b);border-radius:8px;padding:8px}.card b{display:block;font-size:16px;margin-top:2px}.card span{color:var(--m);font-size:11px}
+.pos{color:var(--g)}.neg{color:var(--r)}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;padding:0 14px 20px}@media(min-width:1000px){.grid{grid-template-columns:1fr 1fr}}
+.box{background:var(--p);border:1px solid var(--b);border-radius:8px;padding:10px;overflow:auto}.box h2{font-size:12px;margin:0 0 8px;color:var(--m);text-transform:uppercase;letter-spacing:.06em}
+canvas{width:100%;display:block}table{width:100%;border-collapse:collapse}th,td{text-align:right;padding:3px 6px;border-bottom:1px solid #1b2330;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--m);font-weight:500}
+.sel button{background:#1d2735;border:1px solid var(--b);color:var(--t);padding:3px 8px;margin:0 3px 6px 0;border-radius:5px;cursor:pointer}.sel button.on{border-color:var(--y);color:var(--y)}
+.full{grid-column:1/-1}.note{color:var(--m);font-size:11px;padding:0 14px 16px}
+</style></head><body>
+<header><h1>Adaptive ATR Grid - live paper</h1><span class="tag">paper only, no orders sent</span><span class="tag" id="upd">loading</span>
+<span class="tabs" id="tabs"></span></header>
+<div class="cards" id="cards"></div>
+<div class="grid">
+<div class="box full"><h2>Equity (% return, both bots)</h2><canvas id="eq" height="190"></canvas></div>
+<div class="box full"><h2>Chart: resting orders + fills <span id="cname"></span></h2><div class="sel" id="coins"></div><canvas id="ch" height="330"></canvas>
+<div class="note" style="padding:6px 0 0">Green/red lines = resting limit buys/sells. Dashed = paused by the trend/basket gate. Triangles = fills (up buy, down sell, X = stop). Candles are live 5m from Hyperliquid.</div></div>
+<div class="box"><h2>Positions</h2><div id="pos"></div></div>
+<div class="box"><h2>Resting orders (selected coin)</h2><div id="ord"></div></div>
+<div class="box"><h2>Recent fills</h2><div id="fills"></div></div>
+<div class="box"><h2>Closed episodes (round trips)</h2><div id="eps"></div></div>
+</div>
+<div class="note" id="cfg"></div>
+<div class="note">Paper simulation. Fills are modeled on 5m candles: a limit fills only when price trades 2bp through the level, maker 2bp / taker 4.5bp fees, stop slippage 5bp. Real queue position, latency and partial fills are not modeled. Backtest history: validated adaptive config walk-forward 2021-26 +0.21R/episode; the static lattice is the challenger. Not financial advice.</div>
+<script>
+const COINS=["BTC","ETH","BNB","LTC","ADA","XRP","LINK","ETC"];let S=null,bot="adaptive",coin="BTC",cand=[];
+const $=id=>document.getElementById(id),f=(x,d=2)=>Number(x).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d});
+const cls=x=>x>=0?"pos":"neg",pxf=x=>x>=1000?f(x,1):x>=10?f(x,3):f(x,5);
+const tm=t=>new Date(t).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+async function load(){for(const u of ["state/state.json","https://raw.githubusercontent.com/orrimgames/grid-live/main/state/state.json"]){try{const r=await fetch(u+"?"+Date.now());if(r.ok){S=await r.json();return}}catch(e){}}}
+function tabs(){$("tabs").innerHTML=["adaptive","static"].map(b=>`<button class="${b==bot?"on":""}" onclick="bot='${b}';draw()">${b==="adaptive"?"Adaptive (validated)":"Static lattice (challenger)"}</button>`).join(" ")}
+function cards(){const B=S.bots[bot],sm=S.summary[bot],st=sm.stats,pl=B.equity-S.config.start;
+ const a=[["Equity","$"+f(B.equity,0)],["P&L",(pl>=0?"+":"")+"$"+f(pl,0),cls(pl)],["Return",f(pl/S.config.start*100)+"%",cls(pl)],["Max DD",f(B.maxdd*100)+"%"],["Episodes",st.episodes],["Win rate",st.win==null?"-":f(st.win*100,0)+"%"],["EV / episode",st.evR==null?"-":f(st.evR,2)+"R"],["Fills",st.fills],["Stops",st.stops],["Fees","$"+f(st.fees,0)],["BTC hedge","$"+f(sm.hedge.usd,0)]];
+ $("cards").innerHTML=a.map(x=>`<div class="card"><span>${x[0]}</span><b class="${x[2]||""}">${x[1]}</b></div>`).join("")}
+function eqchart(){const c=$("eq"),W=c.width=c.clientWidth*2,H=c.height=380,x=c.getContext("2d");x.clearRect(0,0,W,H);
+ const sr={adaptive:S.bots.adaptive.curve,static:S.bots.static.curve},col={adaptive:"#5aa9ff",static:"#e8b84a"};let all=[];for(const k in sr)all=all.concat(sr[k]);
+ if(all.length<2){x.fillStyle="#7e8aa0";x.font="22px monospace";x.fillText("collecting data... equity curve fills in hourly",20,60);return}
+ const t0=Math.min(...all.map(p=>p[0])),t1=Math.max(...all.map(p=>p[0])),v=all.map(p=>(p[1]/S.config.start-1)*100),lo=Math.min(0,...v),hi=Math.max(0.1,...v);
+ const X=t=>40+(t-t0)/(t1-t0||1)*(W-60),Y=y=>H-30-(y-lo)/(hi-lo||1)*(H-60);x.strokeStyle="#232c3b";x.lineWidth=2;x.beginPath();x.moveTo(40,Y(0));x.lineTo(W-20,Y(0));x.stroke();
+ x.fillStyle="#7e8aa0";x.font="20px monospace";x.fillText(f(hi)+"%",2,24);x.fillText(f(lo)+"%",2,H-8);
+ for(const k in sr){x.strokeStyle=col[k];x.lineWidth=3;x.beginPath();sr[k].forEach((p,i)=>{const px=X(p[0]),py=Y((p[1]/S.config.start-1)*100);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();x.fillStyle=col[k];x.fillText(k,W-140,k=="adaptive"?30:56)}}
+async function candles(){try{const e=Date.now(),r=await fetch("https://api.hyperliquid.xyz/info",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"candleSnapshot",req:{coin,interval:"5m",startTime:e-170*300000,endTime:e}})});cand=(await r.json()).map(k=>({t:k.t,o:+k.o,h:+k.h,l:+k.l,c:+k.c}))}catch(e){}}
+function chart(){const c=$("ch"),W=c.width=c.clientWidth*2,H=c.height=660,x=c.getContext("2d");x.clearRect(0,0,W,H);if(!cand.length)return;
+ const B=S.bots[bot],st=B.coins[coin],ors=S.summary[bot].orders.filter(o=>o.coin===coin),fl=B.fills.filter(q=>q.coin===coin);
+ let lo=Math.min(...cand.map(k=>k.l)),hi=Math.max(...cand.map(k=>k.h));const near=ors.filter(o=>o.px>lo*0.97&&o.px<hi*1.03);near.forEach(o=>{lo=Math.min(lo,o.px);hi=Math.max(hi,o.px)});const pad=(hi-lo)*.05;lo-=pad;hi+=pad;
+ const n=cand.length,cw=(W-150)/(n+4),X=i=>20+i*cw,Y=p=>H-20-(p-lo)/(hi-lo)*(H-40);
+ x.strokeStyle="#1b2330";x.lineWidth=1;x.fillStyle="#7e8aa0";x.font="20px monospace";for(let i=0;i<=5;i++){const p=lo+(hi-lo)*i/5;x.beginPath();x.moveTo(0,Y(p));x.lineTo(W-120,Y(p));x.stroke();x.fillText(pxf(p),W-118,Y(p)+6)}
+ cand.forEach((k,i)=>{const up=k.c>=k.o;x.strokeStyle=x.fillStyle=up?"#26a69a":"#ef5350";x.lineWidth=2;x.beginPath();x.moveTo(X(i)+cw/2,Y(k.h));x.lineTo(X(i)+cw/2,Y(k.l));x.stroke();x.fillRect(X(i)+cw*.15,Math.min(Y(k.o),Y(k.c)),cw*.7,Math.max(2,Math.abs(Y(k.o)-Y(k.c))))});
+ ors.forEach(o=>{if(o.px<lo||o.px>hi)return;const buy=o.side==="BUY";x.strokeStyle=x.fillStyle=buy?"#1b9e77":"#d62728";x.lineWidth=2;x.setLineDash(o.paused?[10,8]:[]);x.beginPath();x.moveTo(0,Y(o.px));x.lineTo(W-120,Y(o.px));x.stroke();x.setLineDash([]);x.font="18px monospace";x.fillText((buy?"B ":"S ")+"$"+f(o.usd/1000,1)+"k"+(o.paused?" paused":""),W-330,Y(o.px)-4)});
+ fl.forEach(q=>{const i=cand.findIndex(k=>q.t>=k.t&&q.t<k.t+300000);if(i<0)return;const buy=q.side==="BUY",px=q.px;x.fillStyle=buy?"#26a69a":"#ef5350";x.strokeStyle="#fff";x.lineWidth=1.5;const cx=X(i)+cw/2,cy=Y(px);x.beginPath();if(buy){x.moveTo(cx,cy-12);x.lineTo(cx-10,cy+8);x.lineTo(cx+10,cy+8)}else{x.moveTo(cx,cy+12);x.lineTo(cx-10,cy-8);x.lineTo(cx+10,cy-8)}x.closePath();x.fill();x.stroke();if(/stop/.test(q.kind)){x.fillStyle="#fff";x.font="bold 22px monospace";x.fillText("X",cx-7,cy+8)}});
+ const last=cand[n-1].c;x.strokeStyle="#fff";x.setLineDash([3,5]);x.beginPath();x.moveTo(0,Y(last));x.lineTo(W-120,Y(last));x.stroke();x.setLineDash([])}
+function tables(){const B=S.bots[bot],sm=S.summary[bot];
+ $("pos").innerHTML=sm.positions.length?`<table><tr><th>Coin</th><th>Side</th><th>Depth</th><th>Notional</th><th>Avg</th><th>uPnL</th></tr>${sm.positions.map(p=>`<tr><td>${p.coin}</td><td class="${p.qty>0?"pos":"neg"}">${p.qty>0?"LONG":"SHORT"}</td><td>${p.d}</td><td>$${f(p.usd,0)}</td><td>${pxf(p.avg)}</td><td class="${cls(p.upnl)}">${f(p.upnl,0)}</td></tr>`).join("")}</table>`:"<span class=tag>flat</span>";
+ const os=sm.orders.filter(o=>o.coin===coin).sort((a,b)=>b.px-a.px);$("ord").innerHTML=`<table><tr><th>Side</th><th>Price</th><th>Size</th><th>State</th></tr>${os.map(o=>`<tr><td class="${o.side=="BUY"?"pos":"neg"}">${o.side}</td><td>${pxf(o.px)}</td><td>$${f(o.usd,0)}</td><td>${o.paused?"paused (gate)":"resting"}</td></tr>`).join("")}</table>`;
+ $("fills").innerHTML=`<table><tr><th>Time</th><th>Coin</th><th>Side</th><th>Price</th><th>Size</th><th>Type</th></tr>${B.fills.slice(0,25).map(q=>`<tr><td>${tm(q.t)}</td><td>${q.coin}</td><td class="${q.side=="BUY"?"pos":"neg"}">${q.side}</td><td>${pxf(q.px)}</td><td>$${f(q.usd,0)}</td><td>${q.kind}</td></tr>`).join("")}</table>`;
+ $("eps").innerHTML=`<table><tr><th>Closed</th><th>Coin</th><th>P&L</th><th>R</th><th>How</th></tr>${B.episodes.slice(0,25).map(e=>`<tr><td>${tm(e.t)}</td><td>${e.coin}</td><td class="${cls(e.pnl)}">${f(e.pnl,0)}</td><td class="${cls(e.R)}">${f(e.R)}</td><td>${e.kind}</td></tr>`).join("")}</table>`}
+function draw(){tabs();cards();eqchart();chart();tables();$("cname").textContent="- "+coin}
+function coinsUI(){$("coins").innerHTML=COINS.map(c=>`<button class="${c==coin?"on":""}" onclick="coin='${c}';candles().then(()=>{coinsUI();draw()})">${c}</button>`).join("")}
+async function tick(){await load();if(!S){$("upd").textContent="no state yet";return}const cf=S.config;$("upd").textContent="updated "+tm(S.updated)+" (bar "+tm(S.last_ts)+")";
+ $("cfg").textContent=`Config: ${cf.coins.join(" ")} | size x${cf.lev} of 5% per level | spacing ${cf.k} x ATR(${cf.atr}) 1h | ${cf.levels} levels/side | geo ${cf.geo} | Donchian ${cf.donchian} gate | stop ${cf.sl*100}% | BTC hedge ${cf.hedge*100}% | start $${f(cf.start,0)}`;await candles();coinsUI();draw()}
+tick();setInterval(async()=>{if(S){await candles();chart()}},15000);setInterval(tick,120000);
+</script></body></html>

@@ -1,0 +1,31 @@
+name: grid-paper
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: grid-paper
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: step the grid bots
+        run: python worker/grid.py
+      - name: commit state
+        run: |
+          git config user.name "grid-bot"
+          git config user.email "grid-bot@users.noreply.github.com"
+          mkdir -p docs/state
+          cp state/state.json docs/state/state.json
+          git add state/ docs/state/
+          git diff --cached --quiet || git commit -m "step $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase -q || true
+          git push
