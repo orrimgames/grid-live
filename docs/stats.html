@@ -4,7 +4,7 @@
 table{border-collapse:collapse;width:100%;background:#121722;border:1px solid #1d2330;border-radius:8px}td,th{padding:7px 12px;border-bottom:1px solid #1d2330;text-align:right}td:first-child,th:first-child{text-align:left;color:#9aa3b8}th{color:#8b93a7;font-weight:600}
 .note{color:#8b93a7;font-size:12px;margin-top:8px}.pos{color:#26a69a}.neg{color:#ef5350}</style></head><body>
 <header><h1>Hybrid lattice - stats sheet</h1><a href="./">&larr; live dashboard</a><span id="upd" style="color:#8b93a7;font-size:12px"></span></header>
-<div class="wrap"><h2>Performance</h2><table id="t"></table><div class="note" id="src"></div><h2>Calendar year returns (backtest)</h2><table id="y"></table><h2>Caveats</h2><ul id="cv" class="note"></ul></div>
+<div class="wrap"><div id="corr" style="background:#3a1d1d;border:1px solid #ef5350;color:#ffd7d7;padding:10px 14px;border-radius:8px;font-size:13px;display:none"></div><h2>Performance</h2><table id="t"></table><div class="note" id="src"></div><h2>Calendar year returns (backtest)</h2><table id="y"></table><h2>Caveats</h2><ul id="cv" class="note"></ul></div>
 <script>
 const f=(x,d=2)=>x==null||isNaN(x)?"-":Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}),pc=(x,d=2)=>x==null||isNaN(x)?"-":f(x*100,d)+"%";
 function live(S){const B=S.bots.static,cu=B.curve||[];const st=S.config.start;if(cu.length<3)return null;
@@ -21,7 +21,8 @@ const fm=(v,k)=>v==null?"-":k=="p"?pc(v):k=="p3"?pc(v,3):k=="n"?f(v):k=="n1"?f(v
 (async()=>{let B=null,S=null;try{B=await (await fetch("backtest_stats.json?"+Date.now())).json()}catch(e){}
  try{S=await (await fetch("state/state.json?"+Date.now())).json()}catch(e){}
  const L=S?live(S):null;if(S)document.getElementById("upd").textContent="live run since "+new Date(S.started).toLocaleString()+" ("+(L?f(L.days_running,1):"0")+" days)";
- document.getElementById("t").innerHTML="<tr><th></th><th>Backtest (walk-forward, pessimistic fills)</th><th>Live paper</th></tr>"+rows.map(r=>`<tr><td>${r[0]}</td><td>${fm(B&&B[r[1]],r[2])}</td><td>${fm(L&&L[r[1]],r[2])}</td></tr>`).join("");
+ document.getElementById("t").innerHTML="<tr><th></th><th>Backtest (corrected, causal, 1x size)</th><th>Live paper</th></tr>"+rows.map(r=>`<tr><td>${r[0]}</td><td>${fm(B&&B[r[1]],r[2])}</td><td>${fm(L&&L[r[1]],r[2])}</td></tr>`).join("");
+ if(B&&B.correction){const c=document.getElementById("corr");c.style.display="block";c.textContent=B.correction}
  if(B){document.getElementById("src").textContent=B.source+" Live paper stats need a few days of data to mean anything: short samples make Sharpe and CAGR swing wildly.";
   document.getElementById("y").innerHTML="<tr><th>Year</th><th>Return</th></tr>"+Object.entries(B.yearly).map(([y,v])=>`<tr><td>${y}${y=="2026"?" (to Jul)":""}</td><td class="${v>=0?"pos":"neg"}">${pc(v)}</td></tr>`).join("");
   document.getElementById("cv").innerHTML=B.caveats.map(c=>"<li>"+c+"</li>").join("")}})();

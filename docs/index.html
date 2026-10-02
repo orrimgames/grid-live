@@ -29,7 +29,7 @@ canvas{width:100%;display:block}table{width:100%;border-collapse:collapse}th,td{
 <div class="box"><h2>Closed episodes (round trips)</h2><div id="eps"></div></div>
 </div>
 <div class="note" id="cfg"></div>
-<div class="note">Paper simulation. Fills are modeled on 5m candles: a limit fills only when price trades 2bp through the level, maker 2bp / taker 4.5bp fees, stop slippage 5bp. Real queue position, latency and partial fills are not modeled. Backtest history: validated adaptive config walk-forward 2021-26 +0.21R/episode; the static lattice is the challenger. Not financial advice.</div>
+<div class="note">Paper simulation. Fills are modeled on 5m candles: a limit fills only when price trades 2bp through the level, maker 2bp / taker 4.5bp fees, stop slippage 5bp. Real queue position, latency and partial fills are not modeled. CORRECTION: earlier backtest figures for this strategy had a lookahead bug and are withdrawn; the corrected backtest is about flat to negative (see the stats sheet). This live paper run, which uses closed bars only, is the real test. Not financial advice.</div>
 <script>
 const COINS=["BTC","ETH","BNB","LTC","ADA","XRP","LINK","ETC"];let S=null,bot="static",coin="BTC",cand=[];
 const $=id=>document.getElementById(id),f=(x,d=2)=>Number(x).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d});
