@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Grid stats</title>
+<style>body{margin:0;background:#0b0e14;color:#d7dce6;font:14px/1.45 system-ui,Arial,sans-serif}header{padding:14px 18px;border-bottom:1px solid #1d2330;display:flex;gap:12px;align-items:center;flex-wrap:wrap}h1{font-size:17px;margin:0}a{color:#5aa9ff}
+.wrap{padding:16px 18px;max-width:1100px}h2{font-size:13px;color:#8b93a7;letter-spacing:.06em;text-transform:uppercase;margin:22px 0 8px}
+table{border-collapse:collapse;width:100%;background:#121722;border:1px solid #1d2330;border-radius:8px}td,th{padding:7px 12px;border-bottom:1px solid #1d2330;text-align:right}td:first-child,th:first-child{text-align:left;color:#9aa3b8}th{color:#8b93a7;font-weight:600}
+.note{color:#8b93a7;font-size:12px;margin-top:8px}.pos{color:#26a69a}.neg{color:#ef5350}</style></head><body>
+<header><h1>Hybrid lattice - stats sheet</h1><a href="./">&larr; live dashboard</a><span id="upd" style="color:#8b93a7;font-size:12px"></span></header>
+<div class="wrap"><h2>Performance</h2><table id="t"></table><div class="note" id="src"></div><h2>Calendar year returns (backtest)</h2><table id="y"></table><h2>Caveats</h2><ul id="cv" class="note"></ul></div>
+<script>
+const f=(x,d=2)=>x==null||isNaN(x)?"-":Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}),pc=(x,d=2)=>x==null||isNaN(x)?"-":f(x*100,d)+"%";
+function live(S){const B=S.bots.static,cu=B.curve||[];const st=S.config.start;if(cu.length<3)return null;
+ const eq=cu.map(p=>p[1]),ts=cu.map(p=>p[0]);let pk=eq[0],dd=0;for(const e of eq){pk=Math.max(pk,e);dd=Math.max(dd,1-e/pk)}
+ const tot=eq[eq.length-1]/st-1,yrs=(ts[ts.length-1]-S.started)/31557600000;
+ const day=new Map(),mon=new Map();cu.forEach(p=>{const d=new Date(p[0]);day.set(d.toISOString().slice(0,10),p[1]);mon.set(d.toISOString().slice(0,7),p[1])});
+ const ser=m=>{const v=[...m.values()],r=[];let prev=st;for(const x of v){r.push(x/prev-1);prev=x}return r};const dr=ser(day),mr=ser(mon);
+ const rr=[];for(let i=1;i<eq.length;i++)rr.push(eq[i]/eq[i-1]-1);const mean=a=>a.reduce((x,y)=>x+y,0)/(a.length||1),sd=a=>{const m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)))};
+ const dt=(ts[ts.length-1]-ts[0])/(cu.length-1)/3600000,ann=Math.sqrt(8766/dt),neg=rr.filter(x=>x<0);
+ const ep=B.episodes||[],w=ep.filter(e=>e.R>0);
+ return {total_return:tot,cagr:yrs>0.08?Math.pow(1+tot,1/yrs)-1:null,sharpe:sd(rr)>0?mean(rr)/sd(rr)*ann:null,sortino:neg.length>2?mean(rr)/sd(neg)*ann:null,max_dd:dd,ret_dd:dd>0?tot/dd:null,calmar:dd>0&&yrs>0.08?(Math.pow(1+tot,1/yrs)-1)/dd:null,days:dr.length,pct_days_win:dr.length?dr.filter(x=>x>0).length/dr.length:null,pct_days_loss:dr.length?dr.filter(x=>x<0).length/dr.length:null,avg_day:dr.length?mean(dr):null,best_day:dr.length?Math.max(...dr):null,worst_day:dr.length?Math.min(...dr):null,months:mr.length,pct_months_win:mr.length?mr.filter(x=>x>0).length/mr.length:null,avg_month:mr.length?mean(mr):null,best_month:mr.length?Math.max(...mr):null,worst_month:mr.length?Math.min(...mr):null,win_rate_episodes:ep.length?w.length/ep.length:null,ev_per_episode_R:ep.length?mean(ep.map(e=>e.R)):null,episodes:ep.length,fills:B.nfills,fees:B.feepaid,days_running:yrs*365.25}}
+const rows=[["Total return","total_return","p"],["CAGR (annualized)","cagr","p"],["Sharpe (annualized)","sharpe","n"],["Sortino","sortino","n"],["Max drawdown","max_dd","p"],["Return / max DD","ret_dd","n1"],["Calmar","calmar","n"],["Win rate (episodes)","win_rate_episodes","p"],["EV per episode (R)","ev_per_episode_R","n3"],["Episodes","episodes","i"],["Days with data","days","i"],["% days up","pct_days_win","p"],["% days down","pct_days_loss","p"],["Average day","avg_day","p3"],["Best day","best_day","p"],["Worst day","worst_day","p"],["Months with data","months","i"],["% months up","pct_months_win","p"],["Average month","avg_month","p"],["Best month","best_month","p"],["Worst month","worst_month","p"]];
+const fm=(v,k)=>v==null?"-":k=="p"?pc(v):k=="p3"?pc(v,3):k=="n"?f(v):k=="n1"?f(v,1):k=="n3"?f(v,3):k=="i"?f(v,0):v;
+(async()=>{let B=null,S=null;try{B=await (await fetch("backtest_stats.json?"+Date.now())).json()}catch(e){}
+ try{S=await (await fetch("state/state.json?"+Date.now())).json()}catch(e){}
+ const L=S?live(S):null;if(S)document.getElementById("upd").textContent="live run since "+new Date(S.started).toLocaleString()+" ("+(L?f(L.days_running,1):"0")+" days)";
+ document.getElementById("t").innerHTML="<tr><th></th><th>Backtest (walk-forward, pessimistic fills)</th><th>Live paper</th></tr>"+rows.map(r=>`<tr><td>${r[0]}</td><td>${fm(B&&B[r[1]],r[2])}</td><td>${fm(L&&L[r[1]],r[2])}</td></tr>`).join("");
+ if(B){document.getElementById("src").textContent=B.source+" Live paper stats need a few days of data to mean anything: short samples make Sharpe and CAGR swing wildly.";
+  document.getElementById("y").innerHTML="<tr><th>Year</th><th>Return</th></tr>"+Object.entries(B.yearly).map(([y,v])=>`<tr><td>${y}${y=="2026"?" (to Jul)":""}</td><td class="${v>=0?"pos":"neg"}">${pc(v)}</td></tr>`).join("");
+  document.getElementById("cv").innerHTML=B.caveats.map(c=>"<li>"+c+"</li>").join("")}})();
+</script></body></html>

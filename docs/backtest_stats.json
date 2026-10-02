@@ -1,0 +1,42 @@
+{
+ "source": "Walk-forward OOS 2021-01 to 2026-07, 8 crypto coins, hybrid lattice (re-anchor slack 4), ATR24, pessimistic fills (price must trade 3bp through a rung), maker 2bp / taker 5bp, stop slip modeled, 3x lever per level. Params chosen each year from prior years only (32-config grid).",
+ "total_return": 1.4,
+ "cagr": 0.17,
+ "sharpe": 3.7367,
+ "sortino": 4.205,
+ "max_dd": 0.0208,
+ "ret_dd": 67.1516,
+ "calmar": 8.1528,
+ "days": 2037,
+ "pct_days_win": 0.4389,
+ "avg_day": 0.0004,
+ "best_day": 0.0216,
+ "worst_day": -0.0116,
+ "months": 67,
+ "pct_months_win": 0.8955,
+ "avg_month": 0.0132,
+ "median_month": 0.0105,
+ "best_month": 0.0602,
+ "worst_month": -0.0075,
+ "win_rate_episodes": 0.5014,
+ "ev_per_episode_R": 0.265,
+ "episodes": 1414,
+ "liquidations": 0,
+ "profit_factor_daily": 2.2789,
+ "yearly": {
+  "2021": 0.2399826115770185,
+  "2022": 0.13031592235217526,
+  "2023": 0.210379294177917,
+  "2024": 0.15529269006025115,
+  "2025": 0.15420699418540607,
+  "2026": 0.060937631588565466
+ },
+ "caveats": [
+  "Strategy design (gates, windows, spacing) was shaped on the same 2020-26 history; walk-forward only selects the 32-config parameter grid.",
+  "Survivor coins; no queue-position or adverse-selection model; 3bp penetration haircut is arbitrary.",
+  "5m-native test with the same fill haircut cut EV to ~+0.08R: edge is sensitive to fill quality.",
+  "Daniel's 0.5R EV bar is not met (EV +0.265R); this grid is judged on ret/DD and positive EV through pessimistic fills."
+ ],
+ "pct_days_loss": 0.295,
+ "pct_days_flat": 0.2661
+}
