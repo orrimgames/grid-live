@@ -16,7 +16,7 @@ canvas{width:100%;display:block}table{width:100%;border-collapse:collapse}th,td{
 .sel button{background:#1d2735;border:1px solid var(--b);color:var(--t);padding:3px 8px;margin:0 3px 6px 0;border-radius:5px;cursor:pointer}.sel button.on{border-color:var(--y);color:var(--y)}
 .full{grid-column:1/-1}.note{color:var(--m);font-size:11px;padding:0 14px 16px}
 </style></head><body>
-<header><h1>Adaptive ATR Grid - live paper</h1><span class="tag">paper only, no orders sent</span><span class="tag" id="upd">loading</span>
+<header><h1>Adaptive ATR Grid - live paper</h1><span class="tag">paper only, no orders sent</span><span class="tag" id="upd">loading</span><span class="tag" id="live" style="color:#8b93a7">live: connecting</span>
 <span class="tabs" id="tabs"></span></header>
 <div class="cards" id="cards"></div>
 <div class="grid">
@@ -37,8 +37,9 @@ const cls=x=>x>=0?"pos":"neg",pxf=x=>x>=1000?f(x,1):x>=10?f(x,3):f(x,5);
 const tm=t=>new Date(t).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 async function load(){for(const u of ["state/state.json","https://raw.githubusercontent.com/orrimgames/grid-live/main/state/state.json"]){try{const r=await fetch(u+"?"+Date.now());if(r.ok){S=await r.json();return}}catch(e){}}}
 function tabs(){$("tabs").innerHTML=["adaptive","static"].map(b=>`<button class="${b==bot?"on":""}" onclick="bot='${b}';draw()">${b==="adaptive"?"Adaptive (validated)":"Static lattice (challenger)"}</button>`).join(" ")}
-function cards(){const B=S.bots[bot],sm=S.summary[bot],st=sm.stats,pl=B.equity-S.config.start;
- const a=[["Equity","$"+f(B.equity,0)],["P&L",(pl>=0?"+":"")+"$"+f(pl,0),cls(pl)],["Return",f(pl/S.config.start*100)+"%",cls(pl)],["Max DD",f(B.maxdd*100)+"%"],["Episodes",st.episodes],["Win rate",st.win==null?"-":f(st.win*100,0)+"%"],["EV / episode",st.evR==null?"-":f(st.evR,2)+"R"],["Fills",st.fills],["Stops",st.stops],["Fees","$"+f(st.fees,0)],["BTC hedge","$"+f(sm.hedge.usd,0)]];
+function liveEq(B){let e=B.equity;if(!MID.BTC)return e;for(const c of COINS){const k=B.coins[c];if(k&&k.pos&&MID[c]&&S.prices[c])e+=k.pos*(MID[c]-S.prices[c])}if(B.hp)e+=B.hp*(MID.BTC-S.prices.BTC);return e}
+function cards(){const B=S.bots[bot],sm=S.summary[bot],st=sm.stats,pl=liveEq(B)-S.config.start;
+ const a=[["Equity","$"+f(liveEq(B),0)],["P&L",(pl>=0?"+":"")+"$"+f(pl,0),cls(pl)],["Return",f(pl/S.config.start*100)+"%",cls(pl)],["Max DD",f(B.maxdd*100)+"%"],["Episodes",st.episodes],["Win rate",st.win==null?"-":f(st.win*100,0)+"%"],["EV / episode",st.evR==null?"-":f(st.evR,2)+"R"],["Fills",st.fills],["Stops",st.stops],["Fees","$"+f(st.fees,0)],["BTC hedge","$"+f(sm.hedge.usd,0)]];
  $("cards").innerHTML=a.map(x=>`<div class="card"><span>${x[0]}</span><b class="${x[2]||""}">${x[1]}</b></div>`).join("")}
 function eqchart(){const c=$("eq"),W=c.width=c.clientWidth*2,H=c.height=380,x=c.getContext("2d");x.clearRect(0,0,W,H);
  const sr={adaptive:S.bots.adaptive.curve,static:S.bots.static.curve},col={adaptive:"#5aa9ff",static:"#e8b84a"};let all=[];for(const k in sr)all=all.concat(sr[k]);
@@ -66,5 +67,20 @@ function draw(){tabs();cards();eqchart();chart();tables();$("cname").textContent
 function coinsUI(){$("coins").innerHTML=COINS.map(c=>`<button class="${c==coin?"on":""}" onclick="coin='${c}';candles().then(()=>{coinsUI();draw()})">${c}</button>`).join("")}
 async function tick(){await load();if(!S){$("upd").textContent="no state yet";return}const cf=S.config;$("upd").textContent="updated "+tm(S.updated)+" (bar "+tm(S.last_ts)+")";
  $("cfg").textContent=`Config: ${cf.coins.join(" ")} | size x${cf.lev} of 5% per level | spacing ${cf.k} x ATR(${cf.atr}) 1h | ${cf.levels} levels/side | geo ${cf.geo} | Donchian ${cf.donchian} gate | stop ${cf.sl*100}% | BTC hedge ${cf.hedge*100}% | start $${f(cf.start,0)}`;await candles();coinsUI();draw()}
-tick();setInterval(async()=>{if(S){await candles();chart()}},15000);setInterval(tick,120000);
+
+let MID={},ws=null,wsT=0,raf=0;
+function soon(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(S){cards();chart()}})}
+function wsConnect(){try{ws=new WebSocket("wss://api.hyperliquid.xyz/ws")}catch(e){return}
+ ws.onopen=()=>{ws.send(JSON.stringify({method:"subscribe",subscription:{type:"allMids"}}));wsSub();$("live").textContent="live: streaming";$("live").style.color="#26a69a"};
+ ws.onmessage=m=>{let d;try{d=JSON.parse(m.data)}catch(e){return}wsT=Date.now();
+  if(d.channel==="allMids"){const mm=d.data.mids;for(const c of COINS)if(mm[c])MID[c]=+mm[c];
+   if(cand.length&&MID[coin]){const l=cand[cand.length-1];l.c=MID[coin];if(MID[coin]>l.h)l.h=MID[coin];if(MID[coin]<l.l)l.l=MID[coin]}soon()}
+  else if(d.channel==="candle"){const k=d.data;if(k.s!==coin||k.i!=="5m")return;const n={t:k.t,o:+k.o,h:+k.h,l:+k.l,c:+k.c};const l=cand[cand.length-1];
+   if(l&&l.t===n.t)cand[cand.length-1]=n;else if(!l||n.t>l.t){cand.push(n);if(cand.length>200)cand.shift()}soon()}};
+ ws.onclose=ws.onerror=()=>{$("live").textContent="live: reconnecting";$("live").style.color="#8b93a7";setTimeout(wsConnect,3000)}}
+function wsSub(coinOld){if(!ws||ws.readyState!==1)return;if(coinOld)ws.send(JSON.stringify({method:"unsubscribe",subscription:{type:"candle",coin:coinOld,interval:"5m"}}));ws.send(JSON.stringify({method:"subscribe",subscription:{type:"candle",coin:coin,interval:"5m"}}))}
+let _coin=null;setInterval(()=>{if(coin!==_coin){wsSub(_coin);_coin=coin}if(ws&&ws.readyState===1&&Date.now()-wsT>20000){try{ws.close()}catch(e){}}},1000);
+setInterval(()=>{if(ws&&ws.readyState===1)ws.send(JSON.stringify({method:"ping"}))},30000);
+wsConnect();
+tick();setInterval(async()=>{if(S&&(!ws||ws.readyState!==1||Date.now()-wsT>20000)){await candles();chart()}},15000);setInterval(tick,120000);
 </script></body></html>
